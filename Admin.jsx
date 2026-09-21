@@ -182,8 +182,14 @@ export default function Admin({ dados, onSalvar, onVoltar }) {
       await supabaseFetch("categorias", {
         method: "POST",
         body: JSON.stringify(
-    local.categorias.map((nome, ordem) => ({
+ local.categorias.map((nome, ordem) => ({
   nome,
+  slug: nome
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, ""),
   ordem,
 }))
         ),
