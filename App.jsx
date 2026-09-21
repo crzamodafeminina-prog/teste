@@ -110,10 +110,13 @@ async function carregarDados() {
 
     return {
       ...DADOS_PADRAO(),
-      config: config[0]
-        ? { ...CONFIG, ...config[0] }
-        : DADOS_PADRAO().config,
-
+    config: config.reduce(
+  (resultado, item) => ({
+    ...resultado,
+    [item.chave]: item.valor,
+  }),
+  { ...CONFIG }
+),
       categorias: categorias.map((c) => c.nome),
 
       produtos: produtos.map((p) => ({
