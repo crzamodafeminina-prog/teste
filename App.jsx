@@ -144,6 +144,7 @@ async function carregarDados() {
     console.error("Erro ao carregar dados do Supabase:", erro);
     return DADOS_PADRAO();
   }
+}
 
 function aplicarDados(dados) {
   CONFIG = dados.config;
