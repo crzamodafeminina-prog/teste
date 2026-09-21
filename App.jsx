@@ -96,14 +96,54 @@ const DADOS_PADRAO = () => ({
   categorias: [...CATEGORIAS],
 });
 
-function carregarDados() {
+async function carregarDados() {
   try {
-    const salvo = localStorage.getItem(CRZA_STORAGE);
-    if (!salvo) return DADOS_PADRAO();
-    const d = JSON.parse(salvo);
-    return { ...DADOS_PADRAO(), ...d, config: { ...CONFIG, ...(d.config || {}) }, images: { ...IMAGES, ...(d.images || {}), produtos: { ...IMAGES.produtos, ...(d.images?.produtos || {}) } }, produtos: d.produtos || PRODUTOS, categorias: d.categorias || CATEGORIAS };
-  } catch { return DADOS_PADRAO(); }
-}
+    const [config, categorias, produtos, imagens, cores, tamanhos] =
+      await Promise.all([
+        supabaseFetch("configuracoes", "?select=*"),
+        supabaseFetch("categorias", "?select=*&ativo=eq.true&order=ordem"),
+        supabaseFetch("produtos", "?select=*&ativo=eq.true&order=ordem"),
+        supabaseFetch("produto_imagens", "?select=*"),
+        supabaseFetch("produto_cores", "?select=*"),
+        supabaseFetch("produto_tamanhos", "?select=*"),
+      ]);
+
+    return {
+      ...DADOS_PADRAO(),
+      config: config[0]
+        ? { ...CONFIG, ...config[0] }
+        : DADOS_PADRAO().config,
+
+      categorias: categorias.map((c) => c.nome),
+
+      produtos: produtos.map((p) => ({
+        id: p.id,
+        nome: p.nome,
+        preco: Number(p.preco),
+        categoria: p.categoria || "Biquínis",
+        modelagem: p.modelagem || "",
+        tecido: p.tecido || "",
+        bojo: Boolean(p.bojo),
+        destaque: Boolean(p.destaque),
+        descricao: p.descricao || "",
+
+        cores: cores
+          .filter((c) => c.produto_id === p.id)
+          .map((c) => c.cor),
+
+        tamanhos: tamanhos
+          .filter((t) => t.produto_id === p.id)
+          .map((t) => t.tamanho),
+
+        imagens: imagens
+          .filter((i) => i.produto_id === p.id)
+          .map((i) => i.url),
+      })),
+    };
+  } catch (erro) {
+    console.error("Erro ao carregar dados do Supabase:", erro);
+    return DADOS_PADRAO();
+  }
 
 function aplicarDados(dados) {
   CONFIG = dados.config;
