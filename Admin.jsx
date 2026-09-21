@@ -182,11 +182,10 @@ export default function Admin({ dados, onSalvar, onVoltar }) {
       await supabaseFetch("categorias", {
         method: "POST",
         body: JSON.stringify(
-          local.categorias.map((nome, ordem) => ({
-            nome,
-            ordem,
-            ativo: true,
-          }))
+    local.categorias.map((nome, ordem) => ({
+  nome,
+  ordem,
+}))
         ),
       });
     }
