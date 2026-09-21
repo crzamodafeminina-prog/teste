@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: #F7F8FA;
+}
+html {
+  scroll-padding-top: calc(72px + env(safe-area-inset-top, 0px));
+  scroll-behavior: smooth;
+}
+body {
+  background: #ffffff;
+  color: #071A33;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+::selection {
+  background: #12345A;
+  color: #F7F8FA;
+}
+.subir {
+  animation: subir 0.9s cubic-bezier(0.22, 0.8, 0.3, 1) both;
+}
+@keyframes subir {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.revelar {
+  animation: revelar 1.1s cubic-bezier(0.22, 0.8, 0.3, 1) both;
+}
+@keyframes revelar {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+:focus-visible {
+  outline: 2px solid #12345A;
+  outline-offset: 3px;
+}
+.no-scroll {
+  overflow: hidden;
+}
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.scroll-x::-webkit-scrollbar {
+  display: none;
+}
