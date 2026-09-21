@@ -1,6 +1,25 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import AdminLogin from "./AdminLogin.jsx";
+const SUPABASE_URL = "https://rwtgxlncaxddtznbapwz.supabase.co";
+const SUPABASE_KEY = "sb_publishable_x0Uo41P_BbBFOmiKWbh2dQ_VyLByuFi";
 
+async function supabaseFetch(tabela, params = "") {
+  const resposta = await fetch(
+    `${SUPABASE_URL}/rest/v1/${tabela}${params}`,
+    {
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+      },
+    }
+  );
+
+  if (!resposta.ok) {
+    throw new Error(`Erro ao consultar ${tabela}: ${resposta.status}`);
+  }
+
+  return resposta.json();
+}
 /* =========================================================================
    1. CONFIGURAÇÃO DA MARCA  — edite só esta parte para trocar dados
    ========================================================================= */
