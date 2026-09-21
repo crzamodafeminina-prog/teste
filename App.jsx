@@ -153,7 +153,7 @@ function aplicarDados(dados) {
   try { localStorage.setItem(CRZA_STORAGE, JSON.stringify(dados)); } catch {}
 }
 
-const DADOS_INICIAIS = carregarDados();
+const DADOS_INICIAIS = DADOS_PADRAO();
 CONFIG = DADOS_INICIAIS.config;
 IMAGES = DADOS_INICIAIS.images;
 PRODUTOS = DADOS_INICIAIS.produtos;
