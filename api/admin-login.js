@@ -1,55 +1,137 @@
-import { useEffect, useState } from "react";
-import Admin from "./Admin.jsx";
+import crypto from "node:crypto";
 
-export default function AdminLogin({ dados, onSalvar, onVoltar }) {
-  const [status, setStatus] = useState("carregando");
-  const [senha, setSenha] = useState("");
-  const [erro, setErro] = useState("");
+const COOKIE = "crza_admin_session";
+const MAX_AGE = 60 * 60 * 12;
 
-  useEffect(() => {
-    fetch("/api/admin-login", { credentials: "same-origin" })
-      .then(r => r.json())
-      .then(d => setStatus(d.authenticated ? "autenticado" : "login"))
-      .catch(() => { setErro("Não foi possível verificar o acesso. Tente novamente."); setStatus("login"); });
-  }, []);
-
-  const entrar = async (e) => {
-    e.preventDefault();
-    setErro("");
-    try {
-      const r = await fetch("/api/admin-login", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: senha }),
-      });
-      const d = await r.json();
-      if (!r.ok) { setErro(d.error || "Não foi possível entrar."); return; }
-      setSenha("");
-      setStatus("autenticado");
-    } catch { setErro("Não foi possível conectar ao servidor."); }
-  };
-
-  if (status === "carregando") return <div className="min-h-screen grid place-items-center bg-[#F7F8FA] text-[#071A33]">Verificando acesso…</div>;
-  if (status === "autenticado") return <AdminWithLogout dados={dados} onSalvar={onSalvar} onVoltar={onVoltar} />;
-
-  return <div className="min-h-screen grid place-items-center bg-[#F7F8FA] px-5 text-[#071A33]">
-    <form onSubmit={entrar} className="w-full max-w-md rounded-3xl border border-[#071A33]/10 bg-white p-7 shadow-sm">
-      <div className="font-serif text-3xl tracking-[.18em]">CRZA</div>
-      <p className="mt-1 text-xs uppercase tracking-[.18em] text-[#071A33]/45">Área administrativa</p>
-      <h1 className="mt-8 text-2xl font-medium">Acesso restrito</h1>
-      <p className="mt-2 text-sm leading-6 text-[#071A33]/60">Digite a senha administrativa para editar a loja.</p>
-      <label className="mt-6 block space-y-2"><span className="text-xs font-medium">Senha</span><input autoFocus type="password" value={senha} onChange={e => setSenha(e.target.value)} className="w-full rounded-xl border border-[#071A33]/12 px-4 py-3 outline-none focus:border-[#12345A]" /></label>
-      {erro && <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>}
-      <div className="mt-5 flex gap-2"><button type="button" onClick={onVoltar} className="flex-1 rounded-full border border-[#071A33]/15 px-5 py-3 text-xs font-medium tracking-[.12em]">VOLTAR À LOJA</button><button type="submit" className="flex-1 rounded-full bg-[#071A33] px-5 py-3 text-xs font-medium tracking-[.12em] text-white">ENTRAR</button></div>
-    </form>
-  </div>;
+function env(name) {
+  return process.env[name] || "";
 }
 
-function AdminWithLogout({ dados, onSalvar, onVoltar }) {
-  const Comp = Admin;
-  return <div className="relative">
-    <div className="fixed bottom-5 right-5 z-50"><button onClick={async () => { await fetch("/api/admin-login", { method: "DELETE", credentials: "same-origin" }); window.location.reload(); }} className="rounded-full border border-[#071A33]/15 bg-white px-4 py-2 text-xs shadow-sm">Sair do painel</button></div>
-    <Comp dados={dados} onSalvar={onSalvar} onVoltar={onVoltar} />
-  </div>;
+function sign(payload) {
+  return crypto
+    .createHmac("sha256", env("ADMIN_SESSION_SECRET"))
+    .update(payload)
+    .digest("base64url");
+}
+
+function makeToken() {
+  const payload = Buffer.from(
+    JSON.stringify({
+      exp: Math.floor(Date.now() / 1000) + MAX_AGE,
+    })
+  ).toString("base64url");
+
+  return `${payload}.${sign(payload)}`;
+}
+
+function validToken(token) {
+  if (!token || !env("ADMIN_SESSION_SECRET")) return false;
+
+  const [payload, signature] = token.split(".");
+  if (!payload || !signature) return false;
+
+  const expected = sign(payload);
+
+  if (signature.length !== expected.length) return false;
+
+  if (
+    !crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expected)
+    )
+  ) {
+    return false;
+  }
+
+  try {
+    const data = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8")
+    );
+
+    return Number(data.exp) > Math.floor(Date.now() / 1000);
+  } catch {
+    return false;
+  }
+}
+
+function cookieValue(cookieHeader) {
+  const item = (cookieHeader || "")
+    .split(";")
+    .map((x) => x.trim())
+    .find((x) => x.startsWith(`${COOKIE}=`));
+
+  return item
+    ? decodeURIComponent(item.slice(COOKIE.length + 1))
+    : "";
+}
+
+function setCookie(res, token) {
+  res.setHeader(
+    "Set-Cookie",
+    `${COOKIE}=${encodeURIComponent(
+      token
+    )}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${MAX_AGE}`
+  );
+}
+
+function clearCookie(res) {
+  res.setHeader(
+    "Set-Cookie",
+    `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+  );
+}
+
+export default function handler(req, res) {
+  res.setHeader("Cache-Control", "no-store");
+
+  if (req.method === "GET") {
+    return res.status(200).json({
+      authenticated: validToken(cookieValue(req.headers.cookie)),
+    });
+  }
+
+  if (req.method === "DELETE") {
+    clearCookie(res);
+    return res.status(200).json({ authenticated: false });
+  }
+
+  if (req.method !== "POST") {
+    return res.status(405).json({
+      error: "Método não permitido.",
+    });
+  }
+
+  if (
+    !env("ADMIN_PASSWORD") ||
+    !env("ADMIN_SESSION_SECRET")
+  ) {
+    return res.status(503).json({
+      error:
+        "O acesso administrativo ainda não foi configurado na Vercel.",
+    });
+  }
+
+  const password =
+    typeof req.body?.password === "string"
+      ? req.body.password
+      : "";
+
+  const a = Buffer.from(password);
+  const b = Buffer.from(env("ADMIN_PASSWORD"));
+
+  const ok =
+    a.length === b.length &&
+    crypto.timingSafeEqual(a, b);
+
+  if (!ok) {
+    return res.status(401).json({
+      error: "Senha incorreta.",
+    });
+  }
+
+  setCookie(res, makeToken());
+
+  return res.status(200).json({
+    authenticated: true,
+  });
 }
