@@ -138,218 +138,215 @@ export default function Admin({ dados, onSalvar, onVoltar }) {
       },
     }));
 
-  async function salvar() {
-    setSalvando(true);
-    setMensagem("");
+ async function salvar() {
+  setSalvando(true);
+  setMensagem("");
 
-    try {
-      /*
-       * 1. CONFIGURAÇÕES
-       *
-       * O Supabase precisa receber cada configuração
-       * como uma linha com chave + valor.
-       */
-      const configuracoes = Object.entries(local.config || {}).map(
-        ([chave, valor]) => ({
-          chave,
-          valor:
-            typeof valor === "string"
-              ? valor
-              : JSON.stringify(valor),
-        })
-      );
+  try {
+    // 1. CONFIGURAÇÕES
+    const configuracoes = Object.entries(local.config || {}).map(
+      ([chave, valor]) => ({
+        chave,
+        valor:
+          typeof valor === "string"
+            ? valor
+            : JSON.stringify(valor),
+      })
+    );
 
-      if (configuracoes.length > 0) {
-        await supabaseFetch(
-          "configuracoes?on_conflict=chave",
-          {
-            method: "POST",
-            body: JSON.stringify(configuracoes),
-            headers: {
-              Prefer:
-                "resolution=merge-duplicates,return=representation",
-            },
-          }
-        );
-      }
-
-      /*
-       * 2. CATEGORIAS
-       */
-      await supabaseFetch("categorias", {
-        method: "DELETE",
-        headers: {
-          Prefer: "return=minimal",
-        },
-      });
-
-      if (local.categorias.length > 0) {
-        await supabaseFetch("categorias", {
+    if (configuracoes.length > 0) {
+      await supabaseFetch(
+        "configuracoes?on_conflict=chave",
+        {
           method: "POST",
-          body: JSON.stringify(
-            local.categorias.map((nome, ordem) => ({
-              nome,
-              ordem,
-              ativo: true,
-            }))
-          ),
-        });
-      }
-
-      /*
-       * 3. PRODUTOS
-       */
-      const produtosBanco = local.produtos.map(
-        (p, ordem) => ({
-          id: p.id,
-          nome: p.nome,
-          preco: Number(p.preco || 0),
-          categoria: p.categoria || "Biquínis",
-          modelagem: p.modelagem || "",
-          tecido: p.tecido || "",
-          bojo: Boolean(p.bojo),
-          destaque: Boolean(p.destaque),
-          descricao: p.descricao || "",
-          ativo: true,
-          ordem,
-        })
-      );
-
-      if (produtosBanco.length > 0) {
-        await supabaseFetch("produtos?on_conflict=id", {
-          method: "POST",
-          body: JSON.stringify(produtosBanco),
+          body: JSON.stringify(configuracoes),
           headers: {
             Prefer:
               "resolution=merge-duplicates,return=representation",
           },
-        });
-      }
-
-      /*
-       * 4. IMAGENS, CORES E TAMANHOS
-       *
-       * Primeiro removemos os dados relacionados
-       * aos produtos e depois recriamos.
-       */
-
-      await supabaseFetch("produto_imagens", {
-        method: "DELETE",
-        headers: {
-          Prefer: "return=minimal",
-        },
-      });
-
-      await supabaseFetch("produto_cores", {
-        method: "DELETE",
-        headers: {
-          Prefer: "return=minimal",
-        },
-      });
-
-      await supabaseFetch("produto_tamanhos", {
-        method: "DELETE",
-        headers: {
-          Prefer: "return=minimal",
-        },
-      });
-
-      const imagensBanco = [];
-      const coresBanco = [];
-      const tamanhosBanco = [];
-
-      for (const p of local.produtos) {
-        const fotos =
-          local.images?.produtos?.[p.id] ||
-          p.imagens ||
-          [];
-
-        fotos
-          .filter(Boolean)
-          .forEach((url, ordem) => {
-            imagensBanco.push({
-              produto_id: p.id,
-              url,
-              ordem,
-            });
-          });
-
-        (p.cores || [])
-          .filter(Boolean)
-          .forEach((cor) => {
-            coresBanco.push({
-              produto_id: p.id,
-              cor,
-            });
-          });
-
-        (p.tamanhos || [])
-          .filter(Boolean)
-          .forEach((tamanho) => {
-            tamanhosBanco.push({
-              produto_id: p.id,
-              tamanho,
-            });
-          });
-      }
-
-      if (imagensBanco.length > 0) {
-        await supabaseFetch("produto_imagens", {
-          method: "POST",
-          body: JSON.stringify(imagensBanco),
-        });
-      }
-
-      if (coresBanco.length > 0) {
-        await supabaseFetch("produto_cores", {
-          method: "POST",
-          body: JSON.stringify(coresBanco),
-        });
-      }
-
-      if (tamanhosBanco.length > 0) {
-        await supabaseFetch("produto_tamanhos", {
-          method: "POST",
-          body: JSON.stringify(tamanhosBanco),
-        });
-      }
-
-      /*
-       * 5. ATUALIZA O ESTADO DO SITE
-       */
-      const dadosFinais = clone(local);
-
-      dadosFinais.produtos = dadosFinais.produtos.map(
-        (p) => ({
-          ...p,
-          imagens:
-            dadosFinais.images?.produtos?.[p.id] ||
-            p.imagens ||
-            [],
-        })
+        }
       );
-
-      onSalvar(dadosFinais);
-
-      setSalvo(true);
-      setMensagem("Alterações salvas no Supabase.");
-
-      setTimeout(() => {
-        setSalvo(false);
-        setMensagem("");
-      }, 3000);
-    } catch (erro) {
-      console.error("Erro ao salvar:", erro);
-
-      setMensagem(
-        `Erro ao salvar: ${
-          erro?.message || "verifique o Supabase"
-        }`
-      );
-    } finally {
-      setSalvando(false);
     }
+
+    // 2. CATEGORIAS
+    // O Supabase exige uma condição no DELETE.
+    // Usamos id não nulo para remover todas as categorias.
+    await supabaseFetch("categorias?id=not.is.null", {
+      method: "DELETE",
+      headers: {
+        Prefer: "return=minimal",
+      },
+    });
+
+    if (local.categorias.length > 0) {
+      await supabaseFetch("categorias", {
+        method: "POST",
+        body: JSON.stringify(
+          local.categorias.map((nome, ordem) => ({
+            nome,
+            ordem,
+            ativo: true,
+          }))
+        ),
+      });
+    }
+
+    // 3. PRODUTOS
+    const produtosBanco = local.produtos.map(
+      (p, ordem) => ({
+        id: p.id,
+        nome: p.nome,
+        preco: Number(p.preco || 0),
+        categoria: p.categoria || "Biquínis",
+        modelagem: p.modelagem || "",
+        tecido: p.tecido || "",
+        bojo: Boolean(p.bojo),
+        destaque: Boolean(p.destaque),
+        descricao: p.descricao || "",
+        ativo: true,
+        ordem,
+      })
+    );
+
+    if (produtosBanco.length > 0) {
+      await supabaseFetch("produtos?on_conflict=id", {
+        method: "POST",
+        body: JSON.stringify(produtosBanco),
+        headers: {
+          Prefer:
+            "resolution=merge-duplicates,return=representation",
+        },
+      });
+    }
+
+    // 4. IMAGENS
+    await supabaseFetch(
+      "produto_imagens?produto_id=not.is.null",
+      {
+        method: "DELETE",
+        headers: {
+          Prefer: "return=minimal",
+        },
+      }
+    );
+
+    // 5. CORES
+    await supabaseFetch(
+      "produto_cores?produto_id=not.is.null",
+      {
+        method: "DELETE",
+        headers: {
+          Prefer: "return=minimal",
+        },
+      }
+    );
+
+    // 6. TAMANHOS
+    await supabaseFetch(
+      "produto_tamanhos?produto_id=not.is.null",
+      {
+        method: "DELETE",
+        headers: {
+          Prefer: "return=minimal",
+        },
+      }
+    );
+
+    const imagensBanco = [];
+    const coresBanco = [];
+    const tamanhosBanco = [];
+
+    for (const p of local.produtos) {
+      const fotos =
+        local.images?.produtos?.[p.id] ||
+        p.imagens ||
+        [];
+
+      fotos
+        .filter(Boolean)
+        .forEach((url, ordem) => {
+          imagensBanco.push({
+            produto_id: p.id,
+            url,
+            ordem,
+          });
+        });
+
+      (p.cores || [])
+        .filter(Boolean)
+        .forEach((cor) => {
+          coresBanco.push({
+            produto_id: p.id,
+            cor,
+          });
+        });
+
+      (p.tamanhos || [])
+        .filter(Boolean)
+        .forEach((tamanho) => {
+          tamanhosBanco.push({
+            produto_id: p.id,
+            tamanho,
+          });
+        });
+    }
+
+    if (imagensBanco.length > 0) {
+      await supabaseFetch("produto_imagens", {
+        method: "POST",
+        body: JSON.stringify(imagensBanco),
+      });
+    }
+
+    if (coresBanco.length > 0) {
+      await supabaseFetch("produto_cores", {
+        method: "POST",
+        body: JSON.stringify(coresBanco),
+      });
+    }
+
+    if (tamanhosBanco.length > 0) {
+      await supabaseFetch("produto_tamanhos", {
+        method: "POST",
+        body: JSON.stringify(tamanhosBanco),
+      });
+    }
+
+    // 7. ATUALIZA O SITE
+    const dadosFinais = clone(local);
+
+    dadosFinais.produtos = dadosFinais.produtos.map(
+      (p) => ({
+        ...p,
+        imagens:
+          dadosFinais.images?.produtos?.[p.id] ||
+          p.imagens ||
+          [],
+      })
+    );
+
+    onSalvar(dadosFinais);
+
+    setSalvo(true);
+    setMensagem("Alterações salvas no Supabase.");
+
+    setTimeout(() => {
+      setSalvo(false);
+      setMensagem("");
+    }, 3000);
+
+  } catch (erro) {
+    console.error("Erro ao salvar:", erro);
+
+    setMensagem(
+      `Erro ao salvar: ${
+        erro?.message || "verifique o Supabase"
+      }`
+    );
+  } finally {
+    setSalvando(false);
   }
+}
 
   const restaurar = () => {
     if (
