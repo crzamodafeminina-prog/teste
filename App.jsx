@@ -1244,7 +1244,12 @@ function App() {
   const [buscaAberta, setBuscaAberta] = useState(false);
   const [termoCatalogo, setTermoCatalogo] = useState("");
   const carrinho = useCarrinho();
-
+useEffect(() => {
+  carregarDados().then((dadosSupabase) => {
+    aplicarDados(dadosSupabase);
+    setDados(dadosSupabase);
+  });
+}, []);
   const irPara = useCallback((destino) => {
     setPagina(destino);
     window.location.hash = destino;
