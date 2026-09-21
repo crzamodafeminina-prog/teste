@@ -408,36 +408,42 @@ export default function Admin({
         /*
          * Produto já existente no banco.
          */
-        if (
-          typeof produtoLocal.id ===
-          "number"
-        ) {
-          resultado =
-            await supabaseFetch(
-              `produtos?id=eq.${produtoLocal.id}`,
-              {
-                method: "PATCH",
-                body: JSON.stringify(
-                  dadosProduto
-                ),
-              }
-            );
-        } else {
-          /*
-           * Produto novo.
-           * NÃO enviamos id.
-           */
-          resultado =
-            await supabaseFetch(
-              "produtos",
-              {
-                method: "POST",
-                body: JSON.stringify(
-                  dadosProduto
-                ),
-              }
-            );
-        }
+       const produtosExistentes =
+  await supabaseFetch(
+    `produtos?slug=eq.${encodeURIComponent(
+      slug
+    )}&select=*`
+  );
+
+if (
+  Array.isArray(produtosExistentes) &&
+  produtosExistentes.length > 0
+) {
+  const produtoExistente =
+    produtosExistentes[0];
+
+  resultado =
+    await supabaseFetch(
+      `produtos?id=eq.${produtoExistente.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(
+          dadosProduto
+        ),
+      }
+    );
+} else {
+  resultado =
+    await supabaseFetch(
+      "produtos",
+      {
+        method: "POST",
+        body: JSON.stringify(
+          dadosProduto
+        ),
+      }
+    );
+}
 
         const produtoBanco =
           Array.isArray(resultado)
