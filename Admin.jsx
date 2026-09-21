@@ -4,8 +4,7 @@ const SUPABASE_URL =
   "https://rwtgxlncaxddtznbapwz.supabase.co";
 
 const SUPABASE_KEY =
-  "sb_publishable_x0Uo41P_BbBFOmiKWdh2dQ_VyLByuFi";
-
+  "COLE_A_CHAVE_PUBLISHABLE_NOVA_AQUI";
 const clone = (x) =>
   JSON.parse(JSON.stringify(x));
 
