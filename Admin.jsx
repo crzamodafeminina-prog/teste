@@ -35,7 +35,120 @@ async function supabaseFetch(tabela, opcoes = {}) {
 
   return resposta.json();
 }
+function Campo({
+  label,
+  value,
+  onChange,
+  type = "text",
+  placeholder = "",
+}) {
+  return (
+    <label className="block space-y-1.5">
+      <span className="text-xs font-medium text-[#071A33]/65">
+        {label}
+      </span>
 
+      <input
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        type={type}
+        placeholder={placeholder}
+        className="w-full rounded-xl border border-[#071A33]/12 bg-white px-3.5 py-3 text-sm outline-none focus:border-[#12345A]"
+      />
+    </label>
+  );
+}
+
+function Area({ label, value, onChange, rows = 5 }) {
+  return (
+    <label className="block space-y-1.5">
+      <span className="text-xs font-medium text-[#071A33]/65">
+        {label}
+      </span>
+
+      <textarea
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        rows={rows}
+        className="w-full resize-y rounded-xl border border-[#071A33]/12 bg-white px-3.5 py-3 text-sm outline-none focus:border-[#12345A]"
+      />
+    </label>
+  );
+}
+
+function Botao({
+  children,
+  onClick,
+  secondary = false,
+  type = "button",
+  disabled = false,
+}) {
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`rounded-full px-5 py-3 text-xs font-medium tracking-[.12em] transition ${
+        secondary
+          ? "border border-[#071A33]/15 bg-white hover:bg-[#F7F8FA]"
+          : "bg-[#071A33] text-white hover:bg-[#12345A]"
+      } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+    >
+      {children}
+    </button>
+  );
+}
+export default function Admin({ dados, onSalvar, onVoltar }) {
+  const [aba, setAba] = useState("inicio");
+  const [local, setLocal] = useState(() => clone(dados));
+  const [salvo, setSalvo] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [mensagem, setMensagem] = useState("");
+
+  const [selecionado, setSelecionado] = useState(
+    local.produtos[0]?.id || null
+  );
+
+  const produto = local.produtos.find(
+    (p) => p.id === selecionado
+  );
+
+  const atualizar = (chave, valor) =>
+    setLocal((d) => ({
+      ...d,
+      [chave]: valor,
+    }));
+
+  const config = (chave, valor) =>
+    setLocal((d) => ({
+      ...d,
+      config: {
+        ...d.config,
+        [chave]: valor,
+      },
+    }));
+
+  const imagem = (chave, valor) =>
+    setLocal((d) => ({
+      ...d,
+      images: {
+        ...d.images,
+        [chave]: valor,
+      },
+    }));
+
+  const editarProduto = (campo, valor) =>
+    setLocal((d) => ({
+      ...d,
+      produtos: d.produtos.map((p) =>
+        p.id === selecionado
+          ? {
+              ...p,
+              [campo]: valor,
+            }
+          : p
+      ),
+    }));
 function Campo({
   label,
   value,
@@ -138,220 +251,272 @@ export default function Admin({ dados, onSalvar, onVoltar }) {
       },
     }));
 
- async function salvar() {
-  setSalvando(true);
-  setMensagem("");
+   async function salvar() {
+    setSalvando(true);
+    setMensagem("");
 
-  try {
-    // 1. CONFIGURAÇÕES
-    const configuracoes = Object.entries(local.config || {}).map(
-      ([chave, valor]) => ({
-        chave,
-        valor:
-          typeof valor === "string"
-            ? valor
-            : JSON.stringify(valor),
-      })
-    );
+    try {
+      // 1. CONFIGURAÇÕES
+      const configuracoes = Object.entries(local.config || {}).map(
+        ([chave, valor]) => ({
+          chave,
+          valor:
+            typeof valor === "string"
+              ? valor
+              : JSON.stringify(valor),
+        })
+      );
 
-    if (configuracoes.length > 0) {
+      if (configuracoes.length > 0) {
+        await supabaseFetch(
+          "configuracoes?on_conflict=chave",
+          {
+            method: "POST",
+            body: JSON.stringify(configuracoes),
+            headers: {
+              Prefer:
+                "resolution=merge-duplicates,return=representation",
+            },
+          }
+        );
+      }
+
+      // 2. CATEGORIAS
       await supabaseFetch(
-        "configuracoes?on_conflict=chave",
+        "categorias?id=not.is.null",
         {
-          method: "POST",
-          body: JSON.stringify(configuracoes),
+          method: "DELETE",
           headers: {
-            Prefer:
-              "resolution=merge-duplicates,return=representation",
+            Prefer: "return=minimal",
           },
         }
       );
-    }
 
-    // 2. CATEGORIAS
-    // O Supabase exige uma condição no DELETE.
-    // Usamos id não nulo para remover todas as categorias.
-    await supabaseFetch("categorias?id=not.is.null", {
-      method: "DELETE",
-      headers: {
-        Prefer: "return=minimal",
-      },
-    });
-
-    if (local.categorias.length > 0) {
-      await supabaseFetch("categorias", {
-        method: "POST",
-        body: JSON.stringify(
- local.categorias.map((nome, ordem) => ({
-  nome,
-  slug: nome
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, ""),
-  ordem,
-}))
-        ),
-      });
-    }
-
-    // 3. PRODUTOS
-    const produtosBanco = local.produtos.map(
-      (p, ordem) => ({
-        id: p.id,
-        nome: p.nome,
-        preco: Number(p.preco || 0),
-        categoria: p.categoria || "Biquínis",
-        modelagem: p.modelagem || "",
-        tecido: p.tecido || "",
-        bojo: Boolean(p.bojo),
-        destaque: Boolean(p.destaque),
-        descricao: p.descricao || "",
-        ativo: true,
-        ordem,
-      })
-    );
-
-    if (produtosBanco.length > 0) {
-      await supabaseFetch("produtos?on_conflict=id", {
-        method: "POST",
-        body: JSON.stringify(produtosBanco),
-        headers: {
-          Prefer:
-            "resolution=merge-duplicates,return=representation",
-        },
-      });
-    }
-
-    // 4. IMAGENS
-    await supabaseFetch(
-      "produto_imagens?produto_id=not.is.null",
-      {
-        method: "DELETE",
-        headers: {
-          Prefer: "return=minimal",
-        },
-      }
-    );
-
-    // 5. CORES
-    await supabaseFetch(
-      "produto_cores?produto_id=not.is.null",
-      {
-        method: "DELETE",
-        headers: {
-          Prefer: "return=minimal",
-        },
-      }
-    );
-
-    // 6. TAMANHOS
-    await supabaseFetch(
-      "produto_tamanhos?produto_id=not.is.null",
-      {
-        method: "DELETE",
-        headers: {
-          Prefer: "return=minimal",
-        },
-      }
-    );
-
-    const imagensBanco = [];
-    const coresBanco = [];
-    const tamanhosBanco = [];
-
-    for (const p of local.produtos) {
-      const fotos =
-        local.images?.produtos?.[p.id] ||
-        p.imagens ||
-        [];
-
-      fotos
-        .filter(Boolean)
-        .forEach((url, ordem) => {
-          imagensBanco.push({
-            produto_id: p.id,
-            url,
-            ordem,
-          });
+      if (local.categorias.length > 0) {
+        await supabaseFetch("categorias", {
+          method: "POST",
+          body: JSON.stringify(
+            local.categorias.map((nome, ordem) => ({
+              nome,
+              slug: nome
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-|-$/g, ""),
+              ordem,
+            }))
+          ),
         });
+      }
 
-      (p.cores || [])
-        .filter(Boolean)
-        .forEach((cor) => {
-          coresBanco.push({
-            produto_id: p.id,
-            cor,
+      // 3. PRODUTOS
+      // IMPORTANTE:
+      // Não enviamos "id" para produtos.
+      // O Supabase gera o ID automaticamente.
+      const produtosBanco = local.produtos.map(
+        (p, ordem) => ({
+          nome: p.nome,
+          slug:
+            p.slug ||
+            p.nome
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/[^a-z0-9]+/g, "-")
+              .replace(/^-|-$/g, ""),
+          preco: Number(p.preco || 0),
+          categoria: p.categoria || "Biquínis",
+          modelagem: p.modelagem || "",
+          tecido: p.tecido || "",
+          bojo: Boolean(p.bojo),
+          destaque: Boolean(p.destaque),
+          descricao: p.descricao || "",
+          ativo: true,
+          ordem,
+        })
+      );
+
+      const produtosSalvos = [];
+
+      for (const produtoBanco of produtosBanco) {
+        const produtoExistente = local.produtos.find(
+          (p) =>
+            p.id === produtoBanco.id ||
+            p.slug === produtoBanco.slug
+        );
+
+        let resultado;
+
+        // Produto que já possui ID numérico no Supabase
+        if (
+          produtoExistente &&
+          typeof produtoExistente.id === "number"
+        ) {
+          resultado = await supabaseFetch(
+            `produtos?id=eq.${produtoExistente.id}`,
+            {
+              method: "PATCH",
+              body: JSON.stringify(produtoBanco),
+            }
+          );
+        } else {
+          // Produto novo:
+          // deixa o Supabase criar o ID.
+          resultado = await supabaseFetch(
+            "produtos",
+            {
+              method: "POST",
+              body: JSON.stringify(produtoBanco),
+            }
+          );
+        }
+
+        if (resultado?.[0]) {
+          produtosSalvos.push({
+            original:
+              produtoExistente,
+            banco: resultado[0],
           });
-        });
+        }
+      }
 
-      (p.tamanhos || [])
-        .filter(Boolean)
-        .forEach((tamanho) => {
-          tamanhosBanco.push({
-            produto_id: p.id,
-            tamanho,
+      // 4. IMAGENS, CORES E TAMANHOS
+      // Apagamos os registros antigos relacionados
+      // aos produtos existentes.
+      const idsNumericos = produtosSalvos
+        .map((x) => x.banco?.id)
+        .filter(
+          (id) =>
+            typeof id === "number"
+        );
+
+      if (idsNumericos.length > 0) {
+        const listaIds = idsNumericos.join(",");
+
+        await supabaseFetch(
+          `produto_imagens?produto_id=in.(${listaIds})`,
+          {
+            method: "DELETE",
+            headers: {
+              Prefer: "return=minimal",
+            },
+          }
+        );
+
+        await supabaseFetch(
+          `produto_cores?produto_id=in.(${listaIds})`,
+          {
+            method: "DELETE",
+            headers: {
+              Prefer: "return=minimal",
+            },
+          }
+        );
+
+        await supabaseFetch(
+          `produto_tamanhos?produto_id=in.(${listaIds})`,
+          {
+            method: "DELETE",
+            headers: {
+              Prefer: "return=minimal",
+            },
+          }
+        );
+      }
+
+      const imagensBanco = [];
+      const coresBanco = [];
+      const tamanhosBanco = [];
+
+      for (const item of produtosSalvos) {
+        const produtoOriginal = item.original;
+        const produtoBanco = item.banco;
+
+        if (!produtoBanco?.id) continue;
+
+        const fotos =
+          local.images?.produtos?.[
+            produtoOriginal?.id
+          ] ||
+          produtoOriginal?.imagens ||
+          [];
+
+        fotos
+          .filter(Boolean)
+          .forEach((url, ordem) => {
+            imagensBanco.push({
+              produto_id: produtoBanco.id,
+              url,
+              ordem,
+            });
           });
+
+        (produtoOriginal?.cores || [])
+          .filter(Boolean)
+          .forEach((cor) => {
+            coresBanco.push({
+              produto_id: produtoBanco.id,
+              cor,
+            });
+          });
+
+        (produtoOriginal?.tamanhos || [])
+          .filter(Boolean)
+          .forEach((tamanho) => {
+            tamanhosBanco.push({
+              produto_id: produtoBanco.id,
+              tamanho,
+            });
+          });
+      }
+
+      if (imagensBanco.length > 0) {
+        await supabaseFetch("produto_imagens", {
+          method: "POST",
+          body: JSON.stringify(imagensBanco),
         });
+      }
+
+      if (coresBanco.length > 0) {
+        await supabaseFetch("produto_cores", {
+          method: "POST",
+          body: JSON.stringify(coresBanco),
+        });
+      }
+
+      if (tamanhosBanco.length > 0) {
+        await supabaseFetch("produto_tamanhos", {
+          method: "POST",
+          body: JSON.stringify(tamanhosBanco),
+        });
+      }
+
+      // 5. ATUALIZA O SITE
+      const dadosFinais = clone(local);
+
+      onSalvar(dadosFinais);
+
+      setSalvo(true);
+      setMensagem("Alterações salvas no Supabase.");
+
+      setTimeout(() => {
+        setSalvo(false);
+        setMensagem("");
+      }, 3000);
+    } catch (erro) {
+      console.error("Erro ao salvar:", erro);
+
+      setMensagem(
+        `Erro ao salvar: ${
+          erro?.message ||
+          "verifique o Supabase"
+        }`
+      );
+    } finally {
+      setSalvando(false);
     }
-
-    if (imagensBanco.length > 0) {
-      await supabaseFetch("produto_imagens", {
-        method: "POST",
-        body: JSON.stringify(imagensBanco),
-      });
-    }
-
-    if (coresBanco.length > 0) {
-      await supabaseFetch("produto_cores", {
-        method: "POST",
-        body: JSON.stringify(coresBanco),
-      });
-    }
-
-    if (tamanhosBanco.length > 0) {
-      await supabaseFetch("produto_tamanhos", {
-        method: "POST",
-        body: JSON.stringify(tamanhosBanco),
-      });
-    }
-
-    // 7. ATUALIZA O SITE
-    const dadosFinais = clone(local);
-
-    dadosFinais.produtos = dadosFinais.produtos.map(
-      (p) => ({
-        ...p,
-        imagens:
-          dadosFinais.images?.produtos?.[p.id] ||
-          p.imagens ||
-          [],
-      })
-    );
-
-    onSalvar(dadosFinais);
-
-    setSalvo(true);
-    setMensagem("Alterações salvas no Supabase.");
-
-    setTimeout(() => {
-      setSalvo(false);
-      setMensagem("");
-    }, 3000);
-
-  } catch (erro) {
-    console.error("Erro ao salvar:", erro);
-
-    setMensagem(
-      `Erro ao salvar: ${
-        erro?.message || "verifique o Supabase"
-      }`
-    );
-  } finally {
-    setSalvando(false);
   }
-}
 
   const restaurar = () => {
     if (
@@ -377,9 +542,10 @@ export default function Admin({ dados, onSalvar, onVoltar }) {
       ),
     }));
 
-  const excluirProduto = () => {
-    if (!produto || !confirm(`Excluir ${produto.nome}?`))
+   const excluirProduto = () => {
+    if (!produto || !confirm(`Excluir ${produto.nome}?`)) {
       return;
+    }
 
     const lista = local.produtos.filter(
       (p) => p.id !== produto.id
@@ -392,7 +558,7 @@ export default function Admin({ dados, onSalvar, onVoltar }) {
         ...d.images,
         produtos: Object.fromEntries(
           Object.entries(d.images?.produtos || {}).filter(
-            ([id]) => id !== produto.id
+            ([id]) => String(id) !== String(produto.id)
           )
         ),
       },
@@ -402,11 +568,12 @@ export default function Admin({ dados, onSalvar, onVoltar }) {
   };
 
   const novoProduto = () => {
-    const idBase = `produto-${Date.now()}`;
+    const idTemporario = `novo-${Date.now()}`;
 
     const novo = {
-      id: idBase,
+      id: idTemporario,
       nome: "Novo produto",
+      slug: "",
       preco: 0,
       categoria:
         local.categorias[0] || "Biquínis",
@@ -430,14 +597,13 @@ export default function Admin({ dados, onSalvar, onVoltar }) {
         ...d.images,
         produtos: {
           ...(d.images?.produtos || {}),
-          [idBase]: [],
+          [idTemporario]: [],
         },
       },
     }));
 
-    setSelecionado(idBase);
+    setSelecionado(idTemporario);
   };
-
   const fotosProduto =
     local.images?.produtos?.[selecionado] ||
     produto?.imagens ||
